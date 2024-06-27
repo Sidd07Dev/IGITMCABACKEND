@@ -277,6 +277,8 @@ const updateUserCoverImage = asyncHandler(async (req,res)=>{
  
  })
  
+const demoApi = asyncHandler(async (req,res)=>{
+  return res.status(200).json(new ApiResponse(200," ","Success"))
+})
 
-
-export { registerUser, loginUser, logoutUser, refreshAccessToken, changeCurrentPassword, getCurrentUser, updateAccountDetails,updateUserAvatar ,updateUserCoverImage}
+export { registerUser, loginUser, logoutUser, refreshAccessToken, changeCurrentPassword, getCurrentUser, updateAccountDetails,updateUserAvatar ,updateUserCoverImage,demoApi}
