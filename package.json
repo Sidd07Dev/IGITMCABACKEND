@@ -1,7 +1,7 @@
 {
-  "name": "chai-aur-backend",
+  "name": "OnlineCamping",
   "version": "1.0.0",
-  "description": "a backend in at chai aur code channel",
+  "description": " backend Of Online Camping By BatoiBhai",
   "main": "index.js",
   "type": "module",
   "scripts": {

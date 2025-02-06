@@ -1,19 +1,15 @@
 import { Router } from "express";
-import { loginUser, logoutUser, registerUser,refreshAccessToken, demoApi } from "../controllers/user.controller.js";
+import { loginUser, logoutUser, registerUser,refreshAccessToken} from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-router.route("/demo").get(demoApi)
+
 
 router.route("/register").post(
     upload.fields([
-        {name:"avatar",
-            maxCount: 1
-        },
-        {
-            name:"coverImage",
+        {name:"profileImage",
             maxCount: 1
         }
     ]),
