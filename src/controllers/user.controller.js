@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import { sendEmail } from "../utils/notificationService.js";
 
 const genearteAccessAndRefreshToken = async (userId) => {
   try {
@@ -60,6 +61,7 @@ const registerUser = asyncHandler(async (req, res) => {
 
  
 
+console.log(fullname, email, username, password,phone, address, role);
 
 
   if (!profileImageLocalPath) {
@@ -82,6 +84,7 @@ const registerUser = asyncHandler(async (req, res) => {
     phone,
     address, 
     role,
+    status:"pending",
     username: username.toLowerCase()
   })
 
@@ -91,6 +94,16 @@ const registerUser = asyncHandler(async (req, res) => {
   if (!createdUser) {
     throw new ApiError(500, "something went wrong while creating user")
   }
+
+  const mailData={
+    'name':createdUser.fullname,
+    'loginLink':"https://cspcb.netlify.app",
+    'year':2025,
+    'companyLogo':"https://res.cloudinary.com/codebysidd/image/upload/v1739714720/cropped-20231015_222433_nj7ul2.png"
+
+
+  }
+   sendEmail(createdUser.email,"Account creation","account-creation" , mailData);
 
   return res.status(201).json(
     new ApiResponse(200, createdUser, "user registered successfully ")

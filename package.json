@@ -11,8 +11,8 @@
   },
   "keywords": [
     "javascript",
-    "backend",
-    "chai"
+    "batoibhai",
+    "camping"
   ],
   "author": "Sidhanta Pradhan",
   "license": "ISC",
@@ -23,11 +23,17 @@
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.3.3",
     "mongoose-aggregate-paginate-v2": "^1.0.7",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.10.0",
+    "path": "^0.12.7",
+    "stripe": "^17.6.0",
+    "twilio": "^5.4.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.0",

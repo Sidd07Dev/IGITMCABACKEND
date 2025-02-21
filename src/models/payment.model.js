@@ -1,6 +1,5 @@
-const mongoose = require("mongoose");
-const { Schema } = mongoose;
-
+import mongoose from "mongoose";
+import { Schema } from "mongoose";
 const paymentSchema = new Schema(
     {
         userId: {

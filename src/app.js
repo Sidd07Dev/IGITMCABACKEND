@@ -24,8 +24,10 @@ app.use(cookieParser())
 
 //routes import
 
-import userRouter from "./routes/user.route.js"
-import campSiteRouter from "./routes/campsite.route.js"
+import userRouter from "./routes/user.route.js";
+import campSiteRouter from "./routes/campsite.route.js";
+import bookingRouter from "./routes/booking.route.js";
+import paymentRouter from "./routes/payment.route.js";
 
 
 //routes declearation
@@ -35,5 +37,7 @@ app.use("/api/v1/users",userRouter)
 
 app.use("/api/v1/campsite",campSiteRouter)
 
+app.use("/api/v1/booking",bookingRouter)
 
+app.use("/api/v1/payment",paymentRouter)
 export default  app 

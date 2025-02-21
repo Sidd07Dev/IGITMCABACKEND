@@ -2,9 +2,9 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Booking } from "../models/booking.model.js";
-import { CampingSite } from "../models/campingSite.model.js";
+import { CampingSite } from "../models/campingsite.model.js";
 
-import { generateInvoicePDF } from "../utils/invoiceGenerator.js";
+
 
 import cron from "node-cron";
 import { sendEmail, sendSMS } from "../utils/notificationService.js";
@@ -12,30 +12,54 @@ import { sendEmail, sendSMS } from "../utils/notificationService.js";
 // 1. Create a Booking (User Initiated)
 const createBooking = asyncHandler(async (req, res) => {
     const { campingSiteId, checkInDate, checkOutDate } = req.body;
+
+
+
+    const checkIn = new Date(checkInDate);
+    const checkOut = new Date(checkOutDate);
+
+
     if (!campingSiteId || !checkInDate || !checkOutDate) {
         throw new ApiError(400, "All fields are required");
     }
-    
+
     const campsite = await CampingSite.findById(campingSiteId);
     if (!campsite) {
         throw new ApiError(404, "Campsite not found");
     }
-    
-    const existingBookings = await Booking.find({
-        campingSiteId,
-        checkOutDate: { $gt: new Date(checkInDate) },
-        checkInDate: { $lt: new Date(checkOutDate) }
+
+
+
+    // Count the number of bookings for the given date
+    const existingBookingsCount = await Booking.countDocuments({
+        campingSiteId: campingSiteId,
+        checkInDate: checkIn,
+        checkOutDate: checkOut
     });
-    
-    if (existingBookings.length > 0) {
-        throw new ApiError(409, "Selected dates are not available");
+
+    // Check if booking limit is reached
+    if (existingBookingsCount >= campsite.maxBookingsPerDay) {
+        return res.status(200).json(new ApiResponse(200, {
+            available: false,
+            message: `Fully booked on ${checkIn.toDateString()} to ${checkOut.toDateString()} . Try another date.`,
+            maxBookings: campsite.maxBookingsPerDay
+        }));
     }
-    
-    let totalPrice = (new Date(checkOutDate) - new Date(checkInDate)) / (1000 * 60 * 60 * 24) * campsite.pricePerNight;
-    if (campsite.dynamicPricing) {
-        totalPrice *= campsite.dynamicPricing.multiplier;
+
+    const nights = (checkOut - checkIn) / (1000 * 60 * 60 * 24);
+
+    const pricePerNight = Number(campsite?.pricePerNight);
+    if (isNaN(pricePerNight) || pricePerNight <= 0) {
+        throw new Error("Invalid campsite price per night");
     }
-    
+
+    let totalPrice = nights * pricePerNight;
+    // if (campsite.dynamicPricing) {
+    //     totalPrice *= campsite.dynamicPricing.multiplier;
+    // }
+
+
+
     const booking = await Booking.create({
         userId: req.user._id,
         campingSiteId,
@@ -45,7 +69,7 @@ const createBooking = asyncHandler(async (req, res) => {
         status: "pending",
         paymentStatus: "pending"
     });
-    
+
     res.status(201).json(new ApiResponse(201, booking, "Booking created successfully. Please complete payment."));
 });
 
@@ -87,12 +111,7 @@ const cancelBooking = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, {}, "Booking cancelled successfully"));
 });
 
-// 6. Check Availability
-const checkAvailability = asyncHandler(async (req, res) => {
-    const { campingSiteId, checkInDate, checkOutDate } = req.query;
-    const existingBookings = await Booking.find({ campingSiteId, checkOutDate: { $gt: checkInDate }, checkInDate: { $lt: checkOutDate } });
-    res.status(200).json(new ApiResponse(200, existingBookings.length === 0, "Availability checked successfully"));
-});
+
 
 // 7. Auto Expire Unpaid Bookings
 cron.schedule("*/15 * * * *", async () => {
@@ -100,13 +119,13 @@ cron.schedule("*/15 * * * *", async () => {
 });
 
 // 8. Generate Booking Invoice
-const generateInvoice = asyncHandler(async (req, res) => {
-    const { bookingId } = req.params;
-    const booking = await Booking.findById(bookingId);
-    if (!booking) throw new ApiError(404, "Booking not found");
-    const invoiceBuffer = await generateInvoicePDF(booking);
-    res.set({ "Content-Type": "application/pdf" });
-    res.send(invoiceBuffer);
-});
+// const generateInvoice = asyncHandler(async (req, res) => {
+//     const { bookingId } = req.params;
+//     const booking = await Booking.findById(bookingId);
+//     if (!booking) throw new ApiError(404, "Booking not found");
+//     const invoiceBuffer = await generateInvoicePDF(booking);
+//     res.set({ "Content-Type": "application/pdf" });
+//     res.send(invoiceBuffer);
+// });
 
-export { createBooking, getUserBookings, getAllBookings, updateBookingStatus, cancelBooking, checkAvailability, generateInvoice };
+export { createBooking, getUserBookings, getAllBookings, updateBookingStatus, cancelBooking, };

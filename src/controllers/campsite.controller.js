@@ -1,9 +1,12 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { CampingSite } from "../models/campingSite.model.js";
+import  {CampingSite}  from "../models/campingsite.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { User } from "../models/user.model.js";
+import { sendEmail } from "../utils/notificationService.js";
 import mongoose from "mongoose";
+
 
 // 1. Create a Camping Site (Admin/Provider Only)
 const createCampingSite = asyncHandler(async (req, res) => {
@@ -11,9 +14,9 @@ const createCampingSite = asyncHandler(async (req, res) => {
         throw new ApiError(403, "Unauthorized: Only admin or provider can create a campsite");
     }
 
-    const { name, location, pricePerNight, amenities, description, providerId } = req.body;
+    const { name, latitude,longitude, pricePerNight, amenities, description, providerId,address,maxGuests,idType } = req.body;
 
-    if (!name || !location || !pricePerNight || !amenities || !description || !providerId) {
+    if (!name || !latitude || !longitude || !pricePerNight || !amenities || !description || !providerId ||!address ||!maxGuests ||!idType) {
         throw new ApiError(400, "All fields are required");
     }
 
@@ -21,28 +24,79 @@ const createCampingSite = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Invalid provider ID format");
     }
 
-    if (typeof pricePerNight !== "number" || pricePerNight <= 0) {
-        throw new ApiError(400, "Price per night must be a positive number");
-    }
-
+    // if (typeof pricePerNight !== "number" || pricePerNight <= 0) {
+    //     throw new ApiError(400, "Price per night must be a positive number");
+    // }
+     const localgovtIdImage = req.files?.idImage[0]?.path;
+    
+     
+     if(!localgovtIdImage){
+        throw new ApiError(400, "govt Id must be required");
+     }
+     const govtIdImage= await uploadOnCloudinary(localgovtIdImage);
     let uploadedImages = [];
-    if (req.files?.length > 0) {
-        const images = req.files.map(file => file.path);
-        uploadedImages = await Promise.all(images.map(imagePath => uploadOnCloudinary(imagePath)));
+    const size=req.files?.images?.length ;
+    if(size<=0){
+        throw new ApiError(400, "minimum one image  required");
     }
+    for (const file of req.files?.images || []) {
+        try {
+            let localPath = file?.path;
+    
+            // Ensure the file exists before proceeding
+            if (!localPath) {
+                console.error("Error: One of the images is missing or undefined.");
+                continue; // Skip this iteration
+            }
+    
+            let uploadedPath = await uploadOnCloudinary(localPath);
+    
+            if (!uploadedPath?.url) {
+                console.error("Error: Upload failed for an image.");
+                continue;
+            }
+    
+            // Push successfully uploaded image URL into the array
+            uploadedImages.push(uploadedPath.url);
+        } catch (error) {
+            console.error("Error uploading image:", error.message);
+        }
+    }
+    
+    console.log(uploadedImages);
+    
 
     const campsite = await CampingSite.create({
         name,
-        location,
+        'location':{
+            latitude,
+            longitude
+        },
         pricePerNight,
         amenities,
+        address,
         description,
         providerId,
-        images: uploadedImages.map(img => img.url),
+        maxGuests,
+        'images': uploadedImages,
+       'govtId':{
+        idType,
+        'idImage':govtIdImage.url
+       }
     });
 
+    const providerData= await User.findById(providerId);
+    const mailData={
+        'companyLogo':"https://res.cloudinary.com/codebysidd/image/upload/v1739714720/cropped-20231015_222433_nj7ul2.png",
+        'ownerName':providerData.fullname ,
+        'campsiteName':campsite.name,
+        'dashboardLink':"https://admincspcb.netlify.app",
+        'year':2025
+    }
+    sendEmail(providerData.email,"Congratulations.Campsite Register Successfull!","campsite-register" , mailData);
     res.status(201).json(new ApiResponse(201, campsite, "Campsite created successfully"));
 });
+
 
 // 2. Get All Camping Sites with Filtering & Pagination
 const getAllCampingSites = asyncHandler(async (req, res) => {

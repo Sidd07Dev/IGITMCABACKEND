@@ -44,6 +44,11 @@ const campingSiteSchema = new Schema(
             type: Number,
             required: true
         },
+        maxBookingsPerDay: {
+            type: Number,
+            required: true,
+            default: 6  // Default limit set by provider
+        },
         amenities: {
             type: [String]
         },
@@ -55,9 +60,6 @@ const campingSiteSchema = new Schema(
         images: {
             type: [String] // Array of Cloudinary URLs
         },
-        availability: {
-            type: [Date]
-        },
         providerId: {
             type: Schema.Types.ObjectId,
             ref: "User",
@@ -66,9 +68,30 @@ const campingSiteSchema = new Schema(
         rating: {
             type: Number,
             default: 0
+        },
+        availability: {
+            type: [Date]
+        },
+        status:{
+            
+                type:String,
+                enum: ["active", "deactive","pending"],
+                default:"pending"
+            
+        },
+      
+        govtId:{
+            idType:{
+                type:String,
+                require:true
+            },
+            idImage:{
+                type:String,
+                require:true
+            }
         }
     },
     { timestamps: true }
 );
 
-export const CampingSite = mongoose.model("CampingSite", campingSiteSchema);
+export const CampingSite = mongoose.models.CampingSite || mongoose.model("CampingSite", campingSiteSchema);

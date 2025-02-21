@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 const { Schema } = mongoose;
 
 const transactionSchema = new Schema(
@@ -15,6 +15,11 @@ const transactionSchema = new Schema(
         },
         amountTransferred: {
             type: Number,
+            required: true
+        },
+        transactionType: {
+            type: String,
+            enum: ["provider_payout", "user_payment", "refund"],
             required: true
         },
         status: {

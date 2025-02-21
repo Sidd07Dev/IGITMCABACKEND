@@ -44,6 +44,12 @@ import mongoose , {Schema} from "mongoose";
             type: String,
             required: [true, "Password is required"]
         },
+        status:{
+            type:String,
+            enum: ["active", "deactive","pending"],
+            default:"pending"
+        },
+      
         refreshToken: {
             type: String
         }
