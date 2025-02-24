@@ -101,7 +101,7 @@ const createCampingSite = asyncHandler(async (req, res) => {
 // 2. Get All Camping Sites with Filtering & Pagination
 const getAllCampingSites = asyncHandler(async (req, res) => {
     const { location, minPrice, maxPrice, amenities, page = 1, limit = 10 } = req.query;
-    let filters = {};
+    let filters = { status: "active" }; // Only fetch approved (active) campsites
 
     if (location) filters["location"] = location;
     if (minPrice && maxPrice) filters["pricePerNight"] = { $gte: Number(minPrice), $lte: Number(maxPrice) };
@@ -112,10 +112,10 @@ const getAllCampingSites = asyncHandler(async (req, res) => {
         .limit(Number(limit));
 
     if (!campsites.length) {
-        throw new ApiError(404, "No camping sites found");
+        throw new ApiError(404, "No active camping sites found");
     }
 
-    res.status(200).json(new ApiResponse(200, campsites, "Camping sites fetched successfully"));
+    res.status(200).json(new ApiResponse(200, campsites, "Active camping sites fetched successfully"));
 });
 
 // 3. Get a Single Camping Site by ID
@@ -166,4 +166,93 @@ const deleteCampingSite = asyncHandler(async (req, res) => {
     res.status(200).json(new ApiResponse(200, {}, "Campsite deleted successfully"));
 });
 
-export { createCampingSite, getAllCampingSites, getCampingSiteById, updateCampingSite, deleteCampingSite };
+const approveOrRejectCampsite = asyncHandler(async (req, res) => {
+    const { campsiteId } = req.params;  // Get campsite ID from request params
+    const { status } = req.body;        // Get status (approved/rejected) from request body
+
+    // ✅ Check if user is an Admin
+    if (!req.user || req.user.role !== "admin") {
+        return res.status(403).json({ error: "Access denied. Admins only." });
+    }
+
+    // ✅ Validate Status
+    if (!["approved", "rejected"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status value. Use 'approved' or 'rejected'." });
+    }
+
+    // ✅ Find the Campsite
+    const campsite = await CampingSite.findById(campsiteId);
+    if (!campsite) {
+        return res.status(404).json({ error: "Campsite not found" });
+    }
+
+    const dbStatus = status==='approved'?"active":"deactive";
+
+    if(dbStatus == campsite.status){
+        return res.status(400).json({ error: `Campsite already ${status}` });
+    }
+
+    // ✅ Update Campsite Status
+    campsite.status = dbStatus;
+    await campsite.save();
+
+    // ✅ Get Provider Info
+    const provider = await User.findById(campsite.providerId);
+    if (!provider) {
+        return res.status(404).json({ error: "Campsite provider not found" });
+    }
+
+    // ✅ Prepare Email Notification
+    const emailSubject = status === "approved"
+        ? "🎉 Your Campsite has been Approved!"
+        : "❌ Your Campsite Submission was Rejected";
+
+    const emailTemplate = status === "approved" ? "campsite-approved" : "campsite-rejected";
+
+    const mailData = {
+        providerName: provider.fullname,
+        campsiteName: campsite.name,
+        year: new Date().getFullYear(),
+        companyLogo: "https://res.cloudinary.com/codebysidd/image/upload/v1739714720/cropped-20231015_222433_nj7ul2.png",
+        status: status.toUpperCase(),
+        message: status === "approved"
+            ? "Congratulations! Your campsite is now listed on our platform. 🎉"
+            : "Unfortunately, your campsite does not meet our requirements at this time.",
+    };
+    console.log(mailData);
+    
+
+    // ✅ Send Email Notification
+    sendEmail(provider.email, emailSubject, emailTemplate, mailData);
+
+    res.status(200).json({
+        message: `Campsite has been ${status} successfully`,
+        campsite,
+    });
+});
+
+const getPendingCampingSites = asyncHandler(async (req, res) => {
+    // Check if the user is an admin
+    if (!req.user || req.user.role !== "admin") {
+        return res.status(403).json(new ApiError(403, "Access denied. Admins only."));
+    }
+
+    const { page = 1, limit = 10 } = req.query;
+    let filters = { status: "pending" }; // Fetch only pending campsites
+
+    const campsites = await CampingSite.find(filters)
+        .skip((page - 1) * limit)
+        .limit(Number(limit));
+
+    if (!campsites.length) {
+        throw new ApiError(404, "No pending camping sites found");
+    }
+
+    res.status(200).json(new ApiResponse(200, campsites, "Pending camping sites fetched successfully"));
+});
+
+
+
+
+
+export { createCampingSite, getAllCampingSites, getCampingSiteById, updateCampingSite, deleteCampingSite,approveOrRejectCampsite,getPendingCampingSites };

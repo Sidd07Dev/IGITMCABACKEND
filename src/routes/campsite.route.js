@@ -4,7 +4,9 @@ import {
     getAllCampingSites, 
     getCampingSiteById, 
     updateCampingSite, 
-    deleteCampingSite 
+    deleteCampingSite ,
+    approveOrRejectCampsite,
+    getPendingCampingSites
 } from "../controllers/campsite.controller.js";
 import { checkAvailability } from "../controllers/checkAvailability.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
@@ -30,7 +32,10 @@ router.route("/").post(
     createCampingSite
 );
 
+router.route("/pending-sites/pending").get(verifyJWT,getPendingCampingSites);
 router.route("/:id").put(verifyJWT, updateCampingSite);
 router.route("/:id").delete(verifyJWT, deleteCampingSite);
+router.route("/:campsiteId/approve-reject").put(verifyJWT, approveOrRejectCampsite);
+
 
 export default router;

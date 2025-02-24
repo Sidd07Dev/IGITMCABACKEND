@@ -276,4 +276,6 @@ return res.status(200).json(new ApiResponse(200,user,"Avatar  updated successful
 
 
 
+
+
 export { registerUser, loginUser, logoutUser, refreshAccessToken, changeCurrentPassword, getCurrentUser, updateAccountDetails,updateUserAvatar }

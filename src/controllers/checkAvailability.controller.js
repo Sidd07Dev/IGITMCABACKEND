@@ -23,7 +23,8 @@ const checkAvailability = asyncHandler(async (req, res) => {
     const existingBookingsCount = await Booking.countDocuments({
         campingSiteId: campsiteId,
         checkInDate: checkIn,
-        checkOutDate:checkOut
+        checkOutDate:checkOut,
+        'status':"confirmed"
     });
 
     // Check if booking limit is reached
