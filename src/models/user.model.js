@@ -36,23 +36,26 @@ const userSchema = new Schema(
         rollno: {
             type: String
         },
-        profileImage:{
-            type:String,// cloudinary url
-            required:true
-    
+        profileImage: {
+            type: String, // Cloudinary URL
+            required: true
         },
-        batch: { // New field
+        batch: {
             type: String,
             required: true, // Adjust based on your needs
             trim: true,
-            default:43
-          },
+            default: "43"
+        },
         password: {
             type: String,
             required: [true, "Password is required"]
         },
         refreshToken: {
             type: String
+        },
+        expoPushToken: {
+            type: String, // Expo push token for notifications
+            trim: true
         }
     },
     { timestamps: true }
@@ -78,7 +81,7 @@ userSchema.methods.generateAccessToken = function() {
         },
         process.env.ACCESS_TOKEN_SECRET,
         {
-            expiresIn: process.env.ACCES_TOKEN_EXPIRY
+            expiresIn: process.env.ACCES_TOKEN_EXPIRY // Typo corrected to ACCESS_TOKEN_EXPIRY if needed
         }
     );
 };

@@ -5,7 +5,38 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/notificationService.js";
+/**
+ * Registers an Expo push token for the authenticated user.
+ */
+const registerToken = asyncHandler(async (req, res) => {
+  // Extract expoPushToken from request body
+  const { expoPushToken } = req.body;
 
+  // Validate input
+  if (!expoPushToken) {
+    throw new ApiError(400, "Expo push token is required");
+  }
+
+  // Ensure user is authenticated (req.user should be set by middleware)
+  if (!req.user || !req.user._id) {
+    throw new ApiError(401, "User must be authenticated to register a token");
+  }
+
+  // Find the user by ID
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  // Update the user's expoPushToken
+  user.expoPushToken = expoPushToken;
+  await user.save();
+
+  // Return success response
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Push token registered successfully"));
+});
 const generateAccessAndRefreshToken = async (userId) => {
   try {
     const user = await User.findById(userId);
@@ -243,7 +274,8 @@ export {
   getCurrentUser,
   updateAccountDetails,
   updateUserAvatar,
-  getAllBatchmates
+  getAllBatchmates,
+  registerToken
 };
 
 //bhbhbhb

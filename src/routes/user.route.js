@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { loginUser, logoutUser, registerUser,refreshAccessToken,getCurrentUser, changeCurrentPassword, getAllBatchmates} from "../controllers/user.controller.js";
+import { loginUser, logoutUser, registerUser,refreshAccessToken,getCurrentUser, changeCurrentPassword, getAllBatchmates,registerToken} from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -25,5 +25,6 @@ router.route("/batchmate").post(verifyJWT,getAllBatchmates)
 router.route("/refresh-token").post(refreshAccessToken)
 router.route("/user").post(verifyJWT,getCurrentUser)
 router.route("/change-password").put(changeCurrentPassword)
+router.route("register-token").post(verifyJWT,registerToken)
 
 export default router
