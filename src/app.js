@@ -20,7 +20,8 @@ app.use(express.urlencoded({
 }))
 app.use(express.static("public"))
 app.use(cookieParser())
-
+import cronJob from "./controllers/cronjob.controller.js";
+cronJob.keepServerAlive();
 
 //routes import
 

@@ -8,9 +8,8 @@ import { load } from "cheerio";
 import cron from "node-cron";
 
 const NOTICE_URL = "https://igitsarang.ac.in/notice/2025"; // Target URL for scraping
-
-/** 
- * Scrapes notices from the IGIT Sarang notice page and only includes new notices.
+/**
+ * Scrapes notices from the IGIT Sarang notice page and only includes new notices based on ID.
  * @returns {Promise<Array>} Array of new scraped notices
  */
 async function scrapeNotices() {
@@ -25,10 +24,9 @@ async function scrapeNotices() {
     const $ = load(data);
     const noticePromises = [];
 
-    // Collect promises for each row to check DB asynchronously
     $("#table_notice tbody tr").each((index, element) => {
       const $row = $(element);
-      const id = $row.attr("id")?.replace("noticerow_", "") || null;
+      const id = $row.attr("id")?.replace("noticerow_", "") || null; // Extract ID
       const title = $row.find("td").eq(0).text().trim().replace(/\s+/g, " ");
       const dateStr = $row.find("td").eq(1).text().trim();
       const pdfLink = $row.find("td").eq(2).find("a").attr("href") || null;
@@ -38,7 +36,7 @@ async function scrapeNotices() {
       let formattedDate;
       try {
         const [day, month, year] = dateStr.split("-").map(Number);
-        formattedDate = new Date(year, month - 1, day+1); // month is 0-based in JS
+        formattedDate = new Date(year, month - 1, day + 1); // month is 0-based in JS
         if (isNaN(formattedDate.getTime())) {
           throw new Error("Invalid date");
         }
@@ -47,21 +45,26 @@ async function scrapeNotices() {
         console.warn(`Failed to parse date: ${dateStr}`);
       }
 
-      // Push a promise to check if the notice exists in the DB
+      // Push a promise to check if the notice exists in the DB by ID
       noticePromises.push(
         (async () => {
-          const existingNotice = await Notice.findOne({ title, date: formattedDate });
+          if (!id) {
+            console.warn(`No ID found for notice: ${title}, skipping`);
+            return null; // Skip notices without an ID
+          }
+
+          const existingNotice = await Notice.findOne({ id }); // Check by ID
           if (!existingNotice) {
             return { id, title, date: formattedDate, pdfLink, isNew };
-          }
-          console.log(`Notice already exists in DB, skipping: ${title}`);
+          }    
+          console.log(`Notice with ID ${id} already exists in DB, skipping: ${title}`);
           return null; // Return null for existing notices
-        })()  
+        })()
       );
     });
 
     // Resolve all promises and filter out null values (existing notices)
-    const notices = (await Promise.all(noticePromises)).filter(notice => notice !== null);
+    const notices = (await Promise.all(noticePromises)).filter((notice) => notice !== null);
     return notices;
   } catch (error) {
     console.error("Error scraping notices:", error.message);
@@ -81,22 +84,27 @@ const createNoticeFromScraping = async () => {
   }
 
   for (const scrapedNotice of scrapedNotices) {
-    const { title, date, pdfLink } = scrapedNotice;
+    const { id, title, date, pdfLink, isNew } = scrapedNotice;
 
-    // Since we already filtered out existing notices in scrapeNotices,
-    // we can directly save here
     try {
       await Notice.create({
+        id, // Store the ID
         title,
         pdfLink,
         date: date ? new Date(date) : new Date(), // Fallback to current date if null
+        isNew: isNew || false, // Store the isNew flag if needed
       });
-      console.log(`New notice saved: ${title}`);
+      console.log(`New notice saved with ID ${id}: ${title}`);
     } catch (error) {
-      console.error(`Error saving notice ${title}:`, error.message);
+      console.error(`Error saving notice with ID ${id}: ${title} -`, error.message);
     }
   }
 };
+
+// Example usage
+createNoticeFromScraping().catch((err) =>
+  console.error("Error in notice scraping process:", err)
+);
 
 /**
  * Creates a new notice manually via API.
@@ -202,7 +210,6 @@ cron.schedule("*/10 * * * *", async () => {
   await createNoticeFromScraping();
 });
 
-// Initial run on server start
-createNoticeFromScraping();
+
 
 export { createNotice, getAllNotices, editNotice, deleteNotice };
