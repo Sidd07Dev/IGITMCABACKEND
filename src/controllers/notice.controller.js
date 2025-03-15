@@ -9,7 +9,7 @@ import cron from "node-cron";
 
 const NOTICE_URL = "https://igitsarang.ac.in/notice/2025"; // Target URL for scraping
 
-/**
+/** 
  * Scrapes notices from the IGIT Sarang notice page and only includes new notices.
  * @returns {Promise<Array>} Array of new scraped notices
  */

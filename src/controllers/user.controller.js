@@ -35,6 +35,8 @@ const registerUser = asyncHandler(async (req, res) => {
 
   let avatar;
   const avatarLocalPath = req.files?.profileImage[0]?.path;
+  console.log(avatarLocalPath);
+  
   if (avatarLocalPath) {
     avatar = await uploadOnCloudinary(avatarLocalPath);
     if (!avatar?.url) {
@@ -49,7 +51,7 @@ const registerUser = asyncHandler(async (req, res) => {
     linkedinUrl,
     githubUrl,
     rollno,
-    ...(avatar && { profileImage: avatar.url }),
+    'profileImage': avatar.url,
     status: "pending",
   });
 

@@ -36,6 +36,11 @@ const userSchema = new Schema(
         rollno: {
             type: String
         },
+        profileImage:{
+            type:String,// cloudinary url
+            required:true
+    
+        },
         batch: { // New field
             type: String,
             required: true, // Adjust based on your needs
