@@ -1,16 +1,74 @@
-// notice.controller.js
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Notice } from "../models/notice.model.js";
+import { User } from "../models/user.model.js"; // Import User model
 import axios from "axios";
 import { load } from "cheerio";
 import cron from "node-cron";
+import { Expo } from "expo-server-sdk"; // Import Expo SDK
 
 const NOTICE_URL = "https://igitsarang.ac.in/notice/2025"; // Target URL for scraping
+
+// Initialize Expo
+const expo = new Expo();
+
+/**
+ * Sends push notifications to all users with a valid Expo push token.
+ * @param {string} title - Notification title
+ * @param {string} body - Notification body
+ */
+async function sendPushNotifications(title, body) {
+  try {
+    // Fetch all users with an Expo push token
+    const users = await User.find({ expoPushToken: { $exists: true, $ne: null } }).lean();
+    if (!users.length) {
+      console.log("No users with push tokens found");
+      return;
+    }
+
+    const messages = [];
+    for (const user of users) {
+      if (!Expo.isExpoPushToken(user.expoPushToken)) {
+        console.warn(`Invalid Expo push token for user: ${user._id}`);
+        continue;
+      }
+
+      messages.push({
+        to: user.expoPushToken,
+        sound: "default",
+        title: title,
+        body: body,
+        data: { noticeTitle: title }, // Optional: Extra data
+      });
+    }
+
+    const chunks = expo.chunkPushNotifications(messages);
+    const tickets = [];
+
+    for (const chunk of chunks) {
+      try {
+        const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+        tickets.push(...ticketChunk);
+        console.log("Push notifications sent successfully:", ticketChunk);
+      } catch (error) {
+        console.error("Error sending push notification chunk:", error.message);
+      }
+    }
+
+    // Optionally handle receipts (e.g., to check for errors)
+    // const receiptIds = tickets.filter(ticket => ticket.id).map(ticket => ticket.id);
+    // if (receiptIds.length) {
+    //   const receipts = await expo.getPushNotificationReceiptsAsync(receiptIds);
+    //   console.log("Notification receipts:", receipts);
+    // }
+  } catch (error) {
+    console.error("Error in sendPushNotifications:", error.message);
+  }
+}
+
 /**
  * Scrapes notices from the IGIT Sarang notice page and only includes new notices based on ID.
- * @returns {Promise<Array>} Array of new scraped notices
  */
 async function scrapeNotices() {
   try {
@@ -26,17 +84,16 @@ async function scrapeNotices() {
 
     $("#table_notice tbody tr").each((index, element) => {
       const $row = $(element);
-      const id = $row.attr("id")?.replace("noticerow_", "") || null; // Extract ID
+      const id = $row.attr("id")?.replace("noticerow_", "") || null;
       const title = $row.find("td").eq(0).text().trim().replace(/\s+/g, " ");
       const dateStr = $row.find("td").eq(1).text().trim();
       const pdfLink = $row.find("td").eq(2).find("a").attr("href") || null;
       const isNew = $row.find("td").eq(0).find('img[src*="new.gif"]').length > 0;
 
-      // Convert DD-MM-YYYY string to Date object
       let formattedDate;
       try {
         const [day, month, year] = dateStr.split("-").map(Number);
-        formattedDate = new Date(year, month - 1, day + 1); // month is 0-based in JS
+        formattedDate = new Date(year, month - 1, day + 1);
         if (isNaN(formattedDate.getTime())) {
           throw new Error("Invalid date");
         }
@@ -45,25 +102,23 @@ async function scrapeNotices() {
         console.warn(`Failed to parse date: ${dateStr}`);
       }
 
-      // Push a promise to check if the notice exists in the DB by ID
       noticePromises.push(
         (async () => {
           if (!id) {
             console.warn(`No ID found for notice: ${title}, skipping`);
-            return null; // Skip notices without an ID
+            return null;
           }
 
-          const existingNotice = await Notice.findOne({ id }); // Check by ID
+          const existingNotice = await Notice.findOne({ id });
           if (!existingNotice) {
             return { id, title, date: formattedDate, pdfLink, isNew };
-          }    
+          }
           console.log(`Notice with ID ${id} already exists in DB, skipping: ${title}`);
-          return null; // Return null for existing notices
+          return null;
         })()
       );
     });
 
-    // Resolve all promises and filter out null values (existing notices)
     const notices = (await Promise.all(noticePromises)).filter((notice) => notice !== null);
     return notices;
   } catch (error) {
@@ -71,9 +126,9 @@ async function scrapeNotices() {
     return [];
   }
 }
-
+    
 /**
- * Scrapes notices and saves new ones to the database.
+ * Scrapes notices, saves new ones to the database, and sends push notifications.
  */
 const createNoticeFromScraping = async () => {
   const scrapedNotices = await scrapeNotices();
@@ -87,27 +142,28 @@ const createNoticeFromScraping = async () => {
     const { id, title, date, pdfLink, isNew } = scrapedNotice;
 
     try {
-      await Notice.create({
-        id, // Store the ID
+      const newNotice = await Notice.create({
+        id,
         title,
         pdfLink,
-        date: date ? new Date(date) : new Date(), // Fallback to current date if null
-        isNew: isNew || false, // Store the isNew flag if needed
+        date: date ? new Date(date) : new Date(),
+        isNew: isNew || false,
       });
       console.log(`New notice saved with ID ${id}: ${title}`);
+
+      // Send push notification for the new notice
+      await sendPushNotifications(
+        "New Notice",
+        `A new notice has been posted: ${title}`
+      );
     } catch (error) {
       console.error(`Error saving notice with ID ${id}: ${title} -`, error.message);
     }
   }
 };
 
-// Example usage
-createNoticeFromScraping().catch((err) =>
-  console.error("Error in notice scraping process:", err)
-);
-
 /**
- * Creates a new notice manually via API.
+ * Creates a new notice manually via API and sends push notifications.
  */
 const createNotice = asyncHandler(async (req, res) => {
   const { title, pdfLink } = req.body;
@@ -116,7 +172,6 @@ const createNotice = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Title and PDF link are required");
   }
 
-  // Check if notice already exists by title
   const existingNotice = await Notice.findOne({ title });
   if (existingNotice) {
     throw new ApiError(400, "Notice with this title already exists");
@@ -132,6 +187,12 @@ const createNotice = asyncHandler(async (req, res) => {
     throw new ApiError(500, "Failed to create notice");
   }
 
+  // Send push notification for the manually created notice
+  await sendPushNotifications(
+    "New Notice",
+    `A new notice has been posted: ${title}`
+  );
+
   return res
     .status(201)
     .json(new ApiResponse(201, notice, "Notice created successfully"));
@@ -142,7 +203,7 @@ const createNotice = asyncHandler(async (req, res) => {
  */
 const getAllNotices = asyncHandler(async (req, res) => {
   const notices = await Notice.find({})
-    .sort({ date: -1 }) // Newest first
+    .sort({ date: -1 })
     .lean();
 
   if (!notices || notices.length === 0) {
@@ -155,7 +216,7 @@ const getAllNotices = asyncHandler(async (req, res) => {
 });
 
 /**
- * Updates an existing notice.
+ * Updates an existing notice (no notification needed for updates).
  */
 const editNotice = asyncHandler(async (req, res) => {
   const { noticeId } = req.params;
@@ -185,7 +246,7 @@ const editNotice = asyncHandler(async (req, res) => {
 });
 
 /**
- * Deletes a notice by ID.
+ * Deletes a notice by ID (no notification needed for deletion).
  */
 const deleteNotice = asyncHandler(async (req, res) => {
   const { noticeId } = req.params;
@@ -209,7 +270,5 @@ cron.schedule("*/10 * * * *", async () => {
   console.log("Running notice scraping task...");
   await createNoticeFromScraping();
 });
-
-
-
-export { createNotice, getAllNotices, editNotice, deleteNotice };
+createNoticeFromScraping()   
+export { createNotice, getAllNotices, editNotice, deleteNotice };  
