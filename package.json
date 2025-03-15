@@ -1,5 +1,5 @@
 {
-  "name": "OnlineCamping",
+  "name": "IGITMCABACKEND",
   "version": "1.0.0",
   "description": " backend Of Online Camping By BatoiBhai",
   "main": "index.js",
@@ -10,15 +10,15 @@
     "start": "nodemon -r dotenv/config --experimental-json-modules  src/index.js"
   },
   "keywords": [
-    "javascript",
-    "batoibhai",
-    "camping"
+    "javascript"
   ],
   "author": "Sidhanta Pradhan",
   "license": "ISC",
   "dependencies": {
+    "axios": "^1.8.3",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^2.4.3",
+    "cheerio": "^1.0.0",
     "cloudinary": "^2.2.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",

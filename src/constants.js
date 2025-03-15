@@ -1,1 +1,1 @@
-export const DB_NAME = "CampingDB"
+export const DB_NAME = "IGITMCADB"

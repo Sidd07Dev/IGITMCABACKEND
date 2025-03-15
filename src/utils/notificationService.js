@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 
 const transporter = nodemailer.createTransport({
     
-    host: 'mail.batoibhai.com', // Use your SMTP server
+    host: 'smtp.gmail.com', // Use your SMTP server
     port: 465, // Usually 587 for secure connections
     secure: true, // true for 465, false for other ports
     auth: {
