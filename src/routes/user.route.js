@@ -25,6 +25,6 @@ router.route("/batchmate").post(verifyJWT,getAllBatchmates)
 router.route("/refresh-token").post(refreshAccessToken)
 router.route("/user").post(verifyJWT,getCurrentUser)
 router.route("/change-password").put(changeCurrentPassword)
-router.route("register-token").post(verifyJWT,registerToken)
+router.route("/register-token").post(verifyJWT,registerToken)
 
 export default router
