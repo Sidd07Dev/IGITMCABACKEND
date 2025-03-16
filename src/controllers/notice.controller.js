@@ -20,53 +20,91 @@ const expo = new Expo();
  */
 async function sendPushNotifications(title, body) {
   try {
-    // Fetch all users with an Expo push token
-    const users = await User.find({ expoPushToken: { $exists: true, $ne: null } }).lean();
-    if (!users.length) {
-      console.log("No users with push tokens found");
-      return;
-    }
+    console.log(`Starting push notification process for title: "${title}"`);
 
-    const messages = [];
-    for (const user of users) {
-      if (!Expo.isExpoPushToken(user.expoPushToken)) {
-        console.warn(`Invalid Expo push token for user: ${user._id}`);
+    // Fetch users in batches to avoid memory overload with large datasets
+    const batchSize = 1000; // Adjust based on your server's memory capacity
+    let skip = 0;
+    let hasMoreUsers = true;
+
+    while (hasMoreUsers) {
+      // Fetch users with push tokens in batches
+      const users = await User.find({ expoPushToken: { $exists: true, $ne: null } })
+        .skip(skip)
+        .limit(batchSize)
+        .lean();
+
+      if (!users.length) {
+        console.log('No more users with push tokens found');
+        hasMoreUsers = false;
+        break;
+      }
+
+      console.log(`Processing ${users.length} users from batch starting at ${skip}`);
+
+      // Prepare messages for this batch
+      const messages = users
+        .filter(user => Expo.isExpoPushToken(user.expoPushToken))
+        .map(user => ({
+          to: user.expoPushToken,
+          sound: 'default',
+          title: title,
+          body: body,
+          data: { noticeTitle: title }, // Optional: Extra data
+        }));
+
+      if (!messages.length) {
+        console.log('No valid push tokens in this batch');
+        skip += batchSize;
         continue;
       }
 
-      messages.push({
-        to: user.expoPushToken,
-        sound: "default",
-        title: title,
-        body: body,
-        data: { noticeTitle: title }, // Optional: Extra data
+      // Chunk messages into groups of 100 (Expo's limit per request)
+      const chunks = expo.chunkPushNotifications(messages);
+      const tickets = [];
+
+      // Send each chunk concurrently with a delay to respect rate limits
+      const sendPromises = chunks.map(async (chunk, index) => {
+        await new Promise(resolve => setTimeout(resolve, index * 100)); // Stagger requests by 100ms
+        try {
+          const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+          console.log(`Sent chunk ${index + 1}/${chunks.length} with ${ticketChunk.length} notifications`);
+          return ticketChunk;
+        } catch (error) {
+          console.error(`Error sending chunk ${index + 1}:`, error.message);
+          return [];
+        }
       });
-    }
 
-    const chunks = expo.chunkPushNotifications(messages);
-    const tickets = [];
+      // Wait for all chunks in this batch to complete
+      const chunkTickets = await Promise.all(sendPromises);
+      tickets.push(...chunkTickets.flat());
 
-    for (const chunk of chunks) {
-      try {
-        const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-        tickets.push(...ticketChunk);
-        console.log("Push notifications sent successfully:", ticketChunk);
-      } catch (error) {
-        console.error("Error sending push notification chunk:", error.message);
+      // Optional: Handle receipts for error checking
+      const receiptIds = tickets.filter(ticket => ticket.id).map(ticket => ticket.id);
+      if (receiptIds.length) {
+        try {
+          const receipts = await expo.getPushNotificationReceiptsAsync(receiptIds);
+          console.log('Notification receipts:', receipts);
+          // Check for errors in receipts and handle accordingly (e.g., remove invalid tokens)
+          receipts.forEach((receipt, idx) => {
+            if (receipt.status === 'error') {
+              console.warn(`Notification failed for receipt ${receiptIds[idx]}: ${receipt.message}`);
+            }
+          });
+        } catch (error) {
+          console.error('Error fetching receipts:', error.message);
+        }
       }
+
+      skip += batchSize;
     }
 
-    // Optionally handle receipts (e.g., to check for errors)
-    // const receiptIds = tickets.filter(ticket => ticket.id).map(ticket => ticket.id);
-    // if (receiptIds.length) {
-    //   const receipts = await expo.getPushNotificationReceiptsAsync(receiptIds);
-    //   console.log("Notification receipts:", receipts);
-    // }
+    console.log('Push notification process completed');
   } catch (error) {
-    console.error("Error in sendPushNotifications:", error.message);
+    console.error('Error in sendPushNotifications:', error.message);
   }
 }
-
 /**
  * Scrapes notices from the IGIT Sarang notice page and only includes new notices based on ID.
  */
