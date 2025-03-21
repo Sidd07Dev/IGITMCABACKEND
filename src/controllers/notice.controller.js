@@ -22,13 +22,11 @@ async function sendPushNotifications(title, body) {
   try {
     console.log(`Starting push notification process for title: "${title}"`);
 
-    // Fetch users in batches to avoid memory overload with large datasets
-    const batchSize = 1000; // Adjust based on your server's memory capacity
+    const batchSize = 1000; // Adjust based on server memory capacity
     let skip = 0;
     let hasMoreUsers = true;
 
     while (hasMoreUsers) {
-      // Fetch users with push tokens in batches
       const users = await User.find({ expoPushToken: { $exists: true, $ne: null } })
         .skip(skip)
         .limit(batchSize)
@@ -42,7 +40,6 @@ async function sendPushNotifications(title, body) {
 
       console.log(`Processing ${users.length} users from batch starting at ${skip}`);
 
-      // Prepare messages for this batch
       const messages = users
         .filter(user => Expo.isExpoPushToken(user.expoPushToken))
         .map(user => ({
@@ -50,7 +47,7 @@ async function sendPushNotifications(title, body) {
           sound: 'default',
           title: title,
           body: body,
-          data: { noticeTitle: title }, // Optional: Extra data
+          data: { noticeTitle: title },
         }));
 
       if (!messages.length) {
@@ -59,13 +56,11 @@ async function sendPushNotifications(title, body) {
         continue;
       }
 
-      // Chunk messages into groups of 100 (Expo's limit per request)
       const chunks = expo.chunkPushNotifications(messages);
       const tickets = [];
 
-      // Send each chunk concurrently with a delay to respect rate limits
       const sendPromises = chunks.map(async (chunk, index) => {
-        await new Promise(resolve => setTimeout(resolve, index * 100)); // Stagger requests by 100ms
+        await new Promise(resolve => setTimeout(resolve, index * 100)); // Stagger requests
         try {
           const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
           console.log(`Sent chunk ${index + 1}/${chunks.length} with ${ticketChunk.length} notifications`);
@@ -76,30 +71,38 @@ async function sendPushNotifications(title, body) {
         }
       });
 
-      // Wait for all chunks in this batch to complete
       const chunkTickets = await Promise.all(sendPromises);
       tickets.push(...chunkTickets.flat());
 
-      // Optional: Handle receipts for error checking
+      // Handle receipts
       const receiptIds = tickets.filter(ticket => ticket.id).map(ticket => ticket.id);
       if (receiptIds.length) {
         try {
           const receipts = await expo.getPushNotificationReceiptsAsync(receiptIds);
           console.log('Notification receipts:', receipts);
-          // Check for errors in receipts and handle accordingly (e.g., remove invalid tokens)
-          receipts.forEach((receipt, idx) => {
+
+          // Iterate over receipts object (not array)
+          Object.entries(receipts).forEach(([receiptId, receipt]) => {
             if (receipt.status === 'error') {
-              console.warn(`Notification failed for receipt ${receiptIds[idx]}: ${receipt.message}`);
+              console.warn(`Notification failed for receipt ${receiptId}: ${receipt.message}`);
+              // Optional: Remove invalid tokens from database
+              if (receipt.details?.error === 'DeviceNotRegistered') {
+                User.updateOne({ expoPushToken: messages.find(msg => msg.to === receiptId)?.to }, { $unset: { expoPushToken: 1 } })
+                  .then(() => console.log(`Removed invalid token for receipt ${receiptId}`))
+                  .catch(err => console.error(`Error removing token: ${err.message}`));
+              }
+            } else {
+              console.log(`Notification succeeded for receipt ${receiptId}`);
             }
           });
         } catch (error) {
           console.error('Error fetching receipts:', error.message);
         }
-      }
+      }  
 
       skip += batchSize;
     }
-
+   
     console.log('Push notification process completed');
   } catch (error) {
     console.error('Error in sendPushNotifications:', error.message);

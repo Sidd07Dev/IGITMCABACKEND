@@ -5,6 +5,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/notificationService.js";
+import { log } from "console";
 /**
  * Registers an Expo push token for the authenticated user.
  */
@@ -264,6 +265,108 @@ const getAllBatchmates = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, formattedBatchmates, `Batchmates from batch ${userBatch} fetched successfully`));
 });
+const getAllCrCdcByBatch = asyncHandler(async (req, res) => {
+  // Ensure the user is authenticated
+  if (!req.user) {
+    throw new ApiError(401, "Unauthorized: Please log in to access CR/CDC data");
+  }
+
+  const userBatch = req.user.batch; // Get the batch of the authenticated user
+
+  // Fetch all users from the same batch who are either CR or CDC
+  const crCdcMembers = await User.find({
+    batch: userBatch,
+    role: { $in: ["cr", "cdc"] }, // Filter for users with role CR or CDC
+  })
+    .select("fullname role profileImage linkedinUrl githubUrl") // Select only required fields
+    .lean(); // Convert to plain JS objects
+
+  if (!crCdcMembers || crCdcMembers.length === 0) {
+    throw new ApiError(404, `No CR or CDC members found for batch ${userBatch}`);
+  }
+
+  // Map the CR/CDC members to the desired format
+  const formattedCrCdc = crCdcMembers.map((member) => ({
+    name: member.fullname,
+    role: member.role, // CR or CDC
+    profileImage: member.profileImage || null,
+    linkedinUrl: member.linkedinUrl || null,
+    githubUrl: member.githubUrl || null,
+  }));
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, formattedCrCdc, `CR and CDC members from batch ${userBatch} fetched successfully`));
+});
+const makeCrCdc = asyncHandler(async (req, res) => {
+  // Ensure the user is authenticated
+  if (!req.user) {
+    throw new ApiError(401, "Unauthorized: Please log in to assign CR/CDC roles");
+  }
+
+  const { userId, role } = req.body; // Expect userId and role (cr/cdc) in request body
+
+
+  // Validate request body
+  if (!userId || !role) {
+    throw new ApiError(400, "User ID and role (cr/cdc) are required");
+  }
+  if (!["cr", "cdc"].includes(role)) {
+    throw new ApiError(400, "Role must be either 'cr' or 'cdc'");
+  }
+
+  // Check if the authenticated user is a CDC
+  const currentUser = req.user;
+  if (currentUser.role !== "cdc") {
+    throw new ApiError(403, "Forbidden: Only CDC members can assign CR/CDC roles");
+  }
+
+  // Parse batches as numbers (assuming batch is a string like "43")
+  const previousBatch = parseInt(currentUser.batch, 10); // e.g., 43
+  const currentBatch = (previousBatch + 1).toString(); // e.g., "44"
+
+  // Fetch the target user to assign the role
+  const targetUser = await User.findById(userId).select("batch role status");
+  if (!targetUser) {
+    throw new ApiError(404, "Target user not found");
+  }
+
+  // Ensure the target user is from the current batch (next batch after CDC's batch)
+  if (targetUser.batch !== currentBatch) {
+    throw new ApiError(403, `Forbidden: Can only assign roles to users in batch ${currentBatch}`);
+  }
+
+  // Prevent assigning role to inactive users
+  if (targetUser.status === "inactive") {
+    throw new ApiError(400, "Cannot assign role to an inactive user");
+  }
+
+  // Prevent overwriting an existing CR/CDC role (optional)
+  if (["cr", "cdc"].includes(targetUser.role)) {
+    throw new ApiError(400, `User is already assigned as ${targetUser.role}`);
+  }
+
+  // Update the target user's role
+  targetUser.role = role;
+  await targetUser.save();
+
+  // Fetch updated user details for response
+  const updatedUser = await User.findById(userId)
+    .select("fullname role profileImage linkedinUrl githubUrl")
+    .lean();
+
+  const formattedUser = {
+    name: updatedUser.fullname,
+    role: updatedUser.role,
+    profileImage: updatedUser.profileImage || null,
+    linkedinUrl: updatedUser.linkedinUrl || null,
+    githubUrl: updatedUser.githubUrl || null,
+  };
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, formattedUser, `User assigned as ${role} for batch ${currentBatch} successfully`));
+});
 
 export {
   registerUser,
@@ -275,7 +378,9 @@ export {
   updateAccountDetails,
   updateUserAvatar,
   getAllBatchmates,
-  registerToken
+  registerToken,
+  getAllCrCdcByBatch,
+  makeCrCdc
 };
 
 //bhbhbhb
