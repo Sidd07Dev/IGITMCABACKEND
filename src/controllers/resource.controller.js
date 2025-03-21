@@ -110,8 +110,7 @@ const getSemesterResources = asyncHandler(async (req, res) => {
       .lean(),
     SemesterResource.find({
       semester: parseInt(semester, 10),
-      type: "questionPaper",
-      batch: userBatch,
+      type: "questionPaper"
     })
       .select("semester subject fileUrl title description academicYear uploadedBy createdAt")
       .populate("uploadedBy", "fullname")
