@@ -271,7 +271,7 @@ const getAllCrCdcByBatch = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Unauthorized: Please log in to access CR/CDC data");
   }
 
-  const userBatch = req.body; // Get the batch of the authenticated user
+  const { userBatch }= req.body; 
 
   // Fetch all users from the same batch who are either CR or CDC
   const crCdcMembers = await User.find({
