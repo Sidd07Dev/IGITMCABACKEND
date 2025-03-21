@@ -83,7 +83,7 @@ const registerUser = asyncHandler(async (req, res) => {
     linkedinUrl,
     githubUrl,
     rollno,
-    'profileImage': avatar.url,
+    'profileImage': avatar.secure_url,
     status: "pending",
   });
 
