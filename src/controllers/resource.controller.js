@@ -92,7 +92,7 @@ const getSemesterResources = asyncHandler(async (req, res) => {
   }
 
   const { semester } = req.query; // Expect semester as a query parameter
-  const userBatch = req.user.batch; // Get user's batch from authenticated user
+  // const userBatch = req.user.batch; // Get user's batch from authenticated user
 
   // Validate semester
   if (!semester || ![1, 2, 3, 4].includes(parseInt(semester, 10))) {
@@ -147,12 +147,12 @@ const getSemesterResources = asyncHandler(async (req, res) => {
 
   // Check if there are any resources; if not, throw an error
   if (resources.notes.length === 0 && resources.questionPapers.length === 0) {
-    throw new ApiError(404, `No resources found for semester ${semester} and batch ${userBatch}`);
+    throw new ApiError(404, `No resources found for semester ${semester} `);
   }
 
   return res
     .status(200)
-    .json(new ApiResponse(200, resources, `Resources for semester ${semester} and batch ${userBatch} fetched successfully`));
+    .json(new ApiResponse(200, resources, `Resources for semester ${semester}  fetched successfully`));
 });
 export{
     addSemesterResource,

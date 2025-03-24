@@ -1,3 +1,4 @@
+// alumni.model.js
 import mongoose, { Schema } from "mongoose";
 
 const alumniSchema = new Schema(
@@ -16,23 +17,44 @@ const alumniSchema = new Schema(
       type: String,
       required: true,
       trim: true,
-      match: [/^\d{4}$/, 'Batch must be a 4-digit year (e.g., 2020)'], // Optional validation
+      match: [/^\d{4}-\d{4}$/, 'Batch must be in format YYYY-YYYY (e.g., 2015-2018)']
     },
     linkedinUrl: {
       type: String,
+      required: true,
       trim: true,
-      match: [/^https?:\/\/(www\.)?linkedin\.com\/.*$/, 'Please provide a valid LinkedIn URL'], // Optional validation
     },
     companyLogo: {
-      type: String, // URL to company logo
+      type: String,
       trim: true,
+      match: [/^https?:\/\/.+$/, 'Please provide a valid URL for company logo']
     },
     profileImage: {
-      type: String, // URL to profile image
+      type: String,
       trim: true,
+      match: [/^https?:\/\/.+$/, 'Please provide a valid URL for profile image']
     },
+    location: {
+      type: {
+        latitude: {
+          type: Number,
+          required: true,
+          min: -90,
+          max: 90
+        },
+        longitude: {
+          type: Number,
+          required: true,
+          min: -180,
+          max: 180
+        }
+      },
+      required: true
+    }
   },
-  { timestamps: true } // Automatically adds createdAt and updatedAt fields
+  { 
+    timestamps: true // Adds createdAt and updatedAt fields
+  }
 );
 
 export const Alumni = mongoose.model("Alumni", alumniSchema);
