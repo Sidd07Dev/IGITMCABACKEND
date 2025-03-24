@@ -96,7 +96,7 @@ const registerUser = asyncHandler(async (req, res) => {
     name: createdUser.fullname,
     loginLink: "https://cspcb.netlify.app",
     year: 2025,
-    companyLogo: "https://res.cloudinary.com/codebysidd/image/upload/v1739714720/cropped-20231015_222433_nj7ul2.png",
+    companyLogo: "https://upload.wikimedia.org/wikipedia/en/5/5c/Indira_Gandhi_Institute_of_Technology%2C_Sarang_Logo.png",
   };
   await sendEmail(createdUser.email, "Account creation", "account-creation", mailData);
 

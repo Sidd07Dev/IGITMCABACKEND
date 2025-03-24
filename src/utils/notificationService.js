@@ -30,7 +30,7 @@ const sendEmail = async (to, subject, template, data) => {
         );
 
         await transporter.sendMail({
-            from: `BatoiBhai <${process.env.EMAIL_USER}>`,
+            from: `IGIT(MCA) <${process.env.EMAIL_USER}>`,
             to,
             subject,
             html: emailTemplate,

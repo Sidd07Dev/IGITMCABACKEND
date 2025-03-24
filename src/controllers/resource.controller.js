@@ -124,7 +124,7 @@ const getSemesterResources = asyncHandler(async (req, res) => {
     fileUrl: note.fileUrl,
     title: note.title,
     description: note.description || null,
-    uploadedBy: note.uploadedBy.fullname,
+    uploadedBy: note.uploadedBy || null,
     createdAt: note.createdAt,
   }));
 
@@ -135,7 +135,7 @@ const getSemesterResources = asyncHandler(async (req, res) => {
     title: qp.title,
     description: qp.description || null,
     academicYear: qp.academicYear || null,
-    uploadedBy: qp.uploadedBy.fullname,
+    uploadedBy: qp.uploadedBy ||null,
     createdAt: qp.createdAt,
   }));
 
