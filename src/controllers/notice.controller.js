@@ -18,6 +18,96 @@ const expo = new Expo();
  * @param {string} title - Notification title
  * @param {string} body - Notification body
  */
+// async function sendPushNotifications(title, body) {
+//   try {
+//     console.log(`Starting push notification process for title: "${title}"`);
+
+//     const batchSize = 1000; // Adjust based on server memory capacity
+//     let skip = 0;
+//     let hasMoreUsers = true;
+
+//     while (hasMoreUsers) {
+//       const users = await User.find({ expoPushToken: { $exists: true, $ne: null } })
+//         .skip(skip)
+//         .limit(batchSize)
+//         .lean();
+
+//       if (!users.length) {
+//         console.log('No more users with push tokens found');
+//         hasMoreUsers = false;
+//         break;
+//       }
+
+//       console.log(`Processing ${users.length} users from batch starting at ${skip}`);
+
+//       const messages = users
+//         .filter(user => Expo.isExpoPushToken(user.expoPushToken))
+//         .map(user => ({
+//           to: user.expoPushToken,
+//           sound: 'default',
+//           title: title,
+//           body: body,
+//           data: { noticeTitle: title },
+//         }));
+
+//       if (!messages.length) {
+//         console.log('No valid push tokens in this batch');
+//         skip += batchSize;
+//         continue;
+//       }
+
+//       const chunks = expo.chunkPushNotifications(messages);
+//       const tickets = [];
+
+//       const sendPromises = chunks.map(async (chunk, index) => {
+//         await new Promise(resolve => setTimeout(resolve, index * 100)); // Stagger requests
+//         try {
+//           const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+//           console.log(`Sent chunk ${index + 1}/${chunks.length} with ${ticketChunk.length} notifications`);
+//           return ticketChunk;
+//         } catch (error) {
+//           console.error(`Error sending chunk ${index + 1}:`, error.message);
+//           return [];
+//         }
+//       });
+
+//       const chunkTickets = await Promise.all(sendPromises);
+//       tickets.push(...chunkTickets.flat());
+
+//       // Handle receipts
+//       const receiptIds = tickets.filter(ticket => ticket.id).map(ticket => ticket.id);
+//       if (receiptIds.length) {
+//         try {
+//           const receipts = await expo.getPushNotificationReceiptsAsync(receiptIds);
+//           console.log('Notification receipts:', receipts);
+
+//           // Iterate over receipts object (not array)
+//           Object.entries(receipts).forEach(([receiptId, receipt]) => {
+//             if (receipt.status === 'error') {
+//               console.warn(`Notification failed for receipt ${receiptId}: ${receipt.message}`);
+//               // Optional: Remove invalid tokens from database
+//               if (receipt.details?.error === 'DeviceNotRegistered') {
+//                 User.updateOne({ expoPushToken: messages.find(msg => msg.to === receiptId)?.to }, { $unset: { expoPushToken: 1 } })
+//                   .then(() => console.log(`Removed invalid token for receipt ${receiptId}`))
+//                   .catch(err => console.error(`Error removing token: ${err.message}`));
+//               }
+//             } else {
+//               console.log(`Notification succeeded for receipt ${receiptId}`);
+//             }
+//           });
+//         } catch (error) {
+//           console.error('Error fetching receipts:', error.message);
+//         }
+//       }  
+
+//       skip += batchSize;
+//     }
+   
+//     console.log('Push notification process completed');
+//   } catch (error) {
+//     console.error('Error in sendPushNotifications:', error.message);
+//   }
+// }
 async function sendPushNotifications(title, body) {
   try {
     console.log(`Starting push notification process for title: "${title}"`);
@@ -25,6 +115,7 @@ async function sendPushNotifications(title, body) {
     const batchSize = 1000; // Adjust based on server memory capacity
     let skip = 0;
     let hasMoreUsers = true;
+    const processedTokens = new Set(); // To track unique tokens
 
     while (hasMoreUsers) {
       const users = await User.find({ expoPushToken: { $exists: true, $ne: null } })
@@ -40,21 +131,33 @@ async function sendPushNotifications(title, body) {
 
       console.log(`Processing ${users.length} users from batch starting at ${skip}`);
 
-      const messages = users
-        .filter(user => Expo.isExpoPushToken(user.expoPushToken))
-        .map(user => ({
-          to: user.expoPushToken,
-          sound: 'default',
-          title: title,
-          body: body,
-          data: { noticeTitle: title },
-        }));
+      // Filter unique tokens and validate them
+      const uniqueUsers = users.filter(user => {
+        if (processedTokens.has(user.expoPushToken)) {
+          return false; // Skip if token already processed
+        }
+        if (Expo.isExpoPushToken(user.expoPushToken)) {
+          processedTokens.add(user.expoPushToken);
+          return true;
+        }
+        return false;
+      });
 
-      if (!messages.length) {
-        console.log('No valid push tokens in this batch');
+      if (!uniqueUsers.length) {
+        console.log('No new valid push tokens in this batch');
         skip += batchSize;
         continue;
       }
+
+      console.log(`Found ${uniqueUsers.length} unique valid tokens in this batch`);
+
+      const messages = uniqueUsers.map(user => ({
+        to: user.expoPushToken,
+        sound: 'default',
+        title: title,
+        body: body,
+        data: { noticeTitle: title },
+      }));
 
       const chunks = expo.chunkPushNotifications(messages);
       const tickets = [];
@@ -81,15 +184,19 @@ async function sendPushNotifications(title, body) {
           const receipts = await expo.getPushNotificationReceiptsAsync(receiptIds);
           console.log('Notification receipts:', receipts);
 
-          // Iterate over receipts object (not array)
           Object.entries(receipts).forEach(([receiptId, receipt]) => {
             if (receipt.status === 'error') {
               console.warn(`Notification failed for receipt ${receiptId}: ${receipt.message}`);
-              // Optional: Remove invalid tokens from database
               if (receipt.details?.error === 'DeviceNotRegistered') {
-                User.updateOne({ expoPushToken: messages.find(msg => msg.to === receiptId)?.to }, { $unset: { expoPushToken: 1 } })
-                  .then(() => console.log(`Removed invalid token for receipt ${receiptId}`))
-                  .catch(err => console.error(`Error removing token: ${err.message}`));
+                const tokenToRemove = messages.find(msg => msg.to === receiptId)?.to;
+                if (tokenToRemove) {
+                  User.updateOne(
+                    { expoPushToken: tokenToRemove },
+                    { $unset: { expoPushToken: 1 } }
+                  )
+                    .then(() => console.log(`Removed invalid token for receipt ${receiptId}`))
+                    .catch(err => console.error(`Error removing token: ${err.message}`));
+                }
               }
             } else {
               console.log(`Notification succeeded for receipt ${receiptId}`);
@@ -98,12 +205,12 @@ async function sendPushNotifications(title, body) {
         } catch (error) {
           console.error('Error fetching receipts:', error.message);
         }
-      }  
+      }
 
       skip += batchSize;
     }
-   
-    console.log('Push notification process completed');
+
+    console.log(`Push notification process completed. Total unique notifications sent: ${processedTokens.size}`);
   } catch (error) {
     console.error('Error in sendPushNotifications:', error.message);
   }
@@ -134,7 +241,7 @@ async function scrapeNotices() {
       let formattedDate;
       try {
         const [day, month, year] = dateStr.split("-").map(Number);
-        formattedDate = new Date(year, month - 1, day + 1);
+        formattedDate = new Date(year, month - 1, day );
         if (isNaN(formattedDate.getTime())) {
           throw new Error("Invalid date");
         }
