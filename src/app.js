@@ -33,6 +33,12 @@ import alumniRouter from "./routes/alumni.route.js";
 
 //routes declearation
 //user route
+app.get("/",(req,res)=>{
+res.send({
+    activeStatus:true,
+    error:false
+})
+})
 app.use("/api/v1/users",userRouter)
 app.use("/api/v1/notice",noticeRouter)
 app.use("/api/v1/resource",resourceRouter)
